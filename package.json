@@ -1,0 +1,38 @@
+{
+  "name": "design-md-gen",
+  "version": "0.1.0",
+  "description": "Generate a DESIGN.md for your project by scanning Tailwind config, CSS variables, and UI library setup",
+  "type": "module",
+  "bin": {
+    "design-md-gen": "bin/design-md-gen.js"
+  },
+  "files": [
+    "bin",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node bin/design-md-gen.js --version && node bin/design-md-gen.js --stdout . > /dev/null"
+  },
+  "keywords": [
+    "design-system",
+    "design-tokens",
+    "tailwind",
+    "shadcn",
+    "cli",
+    "ai",
+    "agents",
+    "design-md",
+    "developer-tools"
+  ],
+  "author": "horiastanxd",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/horiastanxd/design-md-gen.git"
+  },
+  "homepage": "https://github.com/horiastanxd/design-md-gen#readme",
+  "engines": {
+    "node": ">=18"
+  }
+}
