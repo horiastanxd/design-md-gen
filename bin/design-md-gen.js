@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs';
 import { resolve, join, extname } from 'path';
 import { pathToFileURL } from 'url';
 
@@ -66,23 +66,18 @@ function classifyVars(vars) {
   const colors = {};
   const fonts = {};
   const radii = {};
-  const spacing = {};
-  const other = {};
 
   for (const [k, v] of Object.entries(vars)) {
-    if (k.startsWith('color-') || k.startsWith('clr-') || /^(background|foreground|primary|secondary|accent|muted|card|popover|border|input|ring|destructive|success|warning|info)/.test(k)) {
+    if (k.startsWith('color-') || k.startsWith('clr-') ||
+        /^(background|foreground|primary|secondary|accent|muted|card|popover|border|input|ring|destructive|success|warning|info)/.test(k)) {
       colors[k] = v;
     } else if (k.startsWith('font-') || k.startsWith('text-')) {
       fonts[k] = v;
     } else if (k.startsWith('radius') || k.startsWith('border-radius') || k.startsWith('rounded')) {
       radii[k] = v;
-    } else if (k.startsWith('spacing-') || k.startsWith('space-') || k.startsWith('gap-')) {
-      spacing[k] = v;
-    } else {
-      other[k] = v;
     }
   }
-  return { colors, fonts, radii, spacing, other };
+  return { colors, fonts, radii };
 }
 
 function detectShadcn(vars) {
@@ -119,7 +114,7 @@ function flattenColorMap(obj, prefix = '', depth = 0) {
 }
 
 function parseTailwindText(text) {
-  const result = { colors: {}, fonts: {}, screens: {}, borderRadius: {} };
+  const result = { colors: {}, fonts: {}, screens: {} };
 
   const colorMatch = text.match(/colors\s*:\s*\{([\s\S]*?)\}/);
   if (colorMatch) {
@@ -152,7 +147,7 @@ function detectFromPackage(dir) {
   const deps = { ...pkg.dependencies, ...pkg.devDependencies };
 
   const uiLibrary =
-    deps['@shadcn/ui'] || deps['shadcn-ui'] ? 'shadcn/ui' :
+    deps['@shadcn/ui'] || deps['shadcn-ui'] || deps['shadcn'] ? 'shadcn/ui' :
     deps['@mui/material'] ? 'Material UI' :
     deps['@chakra-ui/react'] ? 'Chakra UI' :
     deps['antd'] ? 'Ant Design' :
@@ -195,7 +190,7 @@ function detectFromPackage(dir) {
     deps.vue ? 'Vue' :
     null;
 
-  return { uiLibrary, hasTailwind, icons, darkMode, animations, framework, name: pkg.name };
+  return { uiLibrary, hasTailwind, icons, darkMode, animations, framework };
 }
 
 function detectCSSVariables(dir) {
@@ -219,13 +214,12 @@ function detectCSSVariables(dir) {
     }
   }
 
-  const cssFiles = findFiles(dir, ['.css'], 2);
-  for (const file of cssFiles) {
+  for (const file of findFiles(dir, ['.css'], 2)) {
     const text = readText(file);
     if (!text) continue;
     const vars = extractCSSVars(text);
     if (Object.keys(vars).length > 3) {
-      return { vars, file: file.replace(dir + '/', '') };
+      return { vars, file: file.slice(dir.length + 1) };
     }
   }
 
@@ -264,21 +258,11 @@ function detectComponents(dir) {
       try {
         const entries = readdirSync(join(dir, rel), { withFileTypes: true });
         const dirs = entries.filter(e => e.isDirectory()).map(e => e.name).slice(0, 8);
-        const files = entries.filter(e => e.isFile()).map(e => e.name).slice(0, 8);
-        return { path: rel, dirs, files };
+        return { path: rel, dirs };
       } catch { /* ignore */ }
     }
   }
   return null;
-}
-
-function hasStorybook(dir) {
-  return existsSync(join(dir, '.storybook'));
-}
-
-function hasDarkConfig(dir, text) {
-  if (!text) return false;
-  return text.includes('darkMode') || text.includes('dark:') || text.includes('.dark');
 }
 
 async function gatherDesignInfo(dir) {
@@ -286,13 +270,12 @@ async function gatherDesignInfo(dir) {
   const cssResult = detectCSSVariables(dir);
   const tokensResult = detectDesignTokens(dir);
   const components = detectComponents(dir);
-  const storybook = hasStorybook(dir);
+  const storybook = existsSync(join(dir, '.storybook'));
 
   let tailwindConfig = null;
   let tailwindText = null;
 
-  const twCandidates = ['tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.ts', 'tailwind.config.cjs'];
-  for (const name of twCandidates) {
+  for (const name of ['tailwind.config.js', 'tailwind.config.mjs', 'tailwind.config.ts', 'tailwind.config.cjs']) {
     const text = readText(join(dir, name));
     if (text) { tailwindText = text; break; }
   }
@@ -307,14 +290,10 @@ async function gatherDesignInfo(dir) {
   if (tailwindConfig) {
     const theme = tailwindConfig.theme || {};
     const ext = theme.extend || {};
-    if (ext.colors) twColors = flattenColorMap(ext.colors);
-    else if (theme.colors) twColors = flattenColorMap(theme.colors);
-    if (ext.fontFamily) twFonts = ext.fontFamily;
-    else if (theme.fontFamily) twFonts = theme.fontFamily;
-    if (ext.screens) twScreens = ext.screens;
-    else if (theme.screens) twScreens = theme.screens;
-    if (ext.borderRadius) twBorderRadius = ext.borderRadius;
-    else if (theme.borderRadius) twBorderRadius = theme.borderRadius;
+    twColors = flattenColorMap(ext.colors || theme.colors || {});
+    twFonts = ext.fontFamily || theme.fontFamily || {};
+    twScreens = ext.screens || theme.screens || {};
+    twBorderRadius = ext.borderRadius || theme.borderRadius || {};
   } else if (tailwindText) {
     const parsed = parseTailwindText(tailwindText);
     twColors = parsed.colors;
@@ -340,7 +319,6 @@ async function gatherDesignInfo(dir) {
     twFonts,
     twScreens,
     twBorderRadius,
-    tailwindText: !!tailwindText,
     cssVars,
     cssFile,
     isShadcn,
@@ -358,7 +336,7 @@ function colorTable(colors) {
     entries.map(([k, v]) => `| \`${k}\` | \`${v}\` |`).join('\n');
 }
 
-function generateDesignMd(info, dir) {
+function generateDesignMd(info) {
   const lines = [];
   const { pkg, twColors, twFonts, twScreens, twBorderRadius, classified, cssFile, isShadcn, tokensResult, components, storybook } = info;
 
@@ -367,17 +345,16 @@ function generateDesignMd(info, dir) {
   lines.push('Design system reference for AI coding agents.');
   lines.push('');
 
-  // Stack
   lines.push('## Stack');
   lines.push('');
 
   const stackItems = [];
   if (pkg?.framework) stackItems.push(`Framework: ${pkg.framework}`);
   if (pkg?.hasTailwind) {
-    const tw = pkg.uiLibrary ? `Tailwind CSS + ${pkg.uiLibrary}` : 'Tailwind CSS';
-    stackItems.push(`UI: ${tw}`);
-  } else if (pkg?.uiLibrary) {
-    stackItems.push(`UI library: ${pkg.uiLibrary}`);
+    const uiLabel = (isShadcn && !pkg.uiLibrary) ? 'shadcn/ui' : pkg.uiLibrary;
+    stackItems.push(`UI: Tailwind CSS${uiLabel ? ` + ${uiLabel}` : ''}`);
+  } else if (pkg?.uiLibrary || isShadcn) {
+    stackItems.push(`UI library: ${pkg?.uiLibrary || 'shadcn/ui'}`);
   }
   if (pkg?.icons) stackItems.push(`Icons: ${pkg.icons}`);
   if (pkg?.animations) stackItems.push(`Animations: ${pkg.animations}`);
@@ -391,12 +368,11 @@ function generateDesignMd(info, dir) {
   }
   lines.push('');
 
-  // Colors
   lines.push('## Colors');
   lines.push('');
 
   if (isShadcn && classified?.colors && Object.keys(classified.colors).length) {
-    lines.push('shadcn/ui semantic tokens (from `' + cssFile + '`):');
+    lines.push(`shadcn/ui semantic tokens (from \`${cssFile}\`):`);
     lines.push('');
     lines.push('```css');
     Object.entries(classified.colors).slice(0, 20).forEach(([k, v]) => {
@@ -424,7 +400,6 @@ function generateDesignMd(info, dir) {
   }
   lines.push('');
 
-  // Typography
   lines.push('## Typography');
   lines.push('');
 
@@ -437,8 +412,7 @@ function generateDesignMd(info, dir) {
     lines.push('| Family | Value |');
     lines.push('|--------|-------|');
     Object.entries(fonts).slice(0, 6).forEach(([k, v]) => {
-      const val = Array.isArray(v) ? v[0] : v;
-      lines.push(`| \`${k}\` | ${val} |`);
+      lines.push(`| \`${k}\` | ${Array.isArray(v) ? v[0] : v} |`);
     });
   } else if (pkg?.hasTailwind) {
     lines.push('Tailwind default font stack. Override with `font-sans`, `font-mono` etc.');
@@ -447,7 +421,6 @@ function generateDesignMd(info, dir) {
   }
   lines.push('');
 
-  // Breakpoints
   if (Object.keys(twScreens).length) {
     lines.push('## Breakpoints');
     lines.push('');
@@ -464,18 +437,16 @@ function generateDesignMd(info, dir) {
     lines.push('');
   }
 
-  // Border radius
-  if (Object.keys(twBorderRadius).length || (classified?.radii && Object.keys(classified.radii).length)) {
+  const radii = { ...twBorderRadius, ...(classified?.radii || {}) };
+  if (Object.keys(radii).length) {
     lines.push('## Border radius');
     lines.push('');
-    const radii = { ...twBorderRadius, ...(classified?.radii || {}) };
     Object.entries(radii).slice(0, 8).forEach(([k, v]) => {
       lines.push(`- \`${k}\`: \`${v}\``);
     });
     lines.push('');
   }
 
-  // Components
   if (components) {
     lines.push('## Components');
     lines.push('');
@@ -488,7 +459,6 @@ function generateDesignMd(info, dir) {
     lines.push('');
   }
 
-  // Design tokens file
   if (tokensResult) {
     lines.push('## Design tokens');
     lines.push('');
@@ -496,8 +466,7 @@ function generateDesignMd(info, dir) {
     lines.push('');
   }
 
-  // Dark mode
-  if (pkg?.darkMode || (info.cssVars && Object.keys(info.cssVars).some(k => k.includes('dark')))) {
+  if (pkg?.darkMode || isShadcn) {
     lines.push('## Dark mode');
     lines.push('');
     if (pkg?.darkMode) {
@@ -509,7 +478,6 @@ function generateDesignMd(info, dir) {
     lines.push('');
   }
 
-  // Conventions
   lines.push('## Conventions');
   lines.push('');
   if (isShadcn) {
@@ -544,7 +512,7 @@ async function main() {
 
   const dir = resolve(targetDir);
   const info = await gatherDesignInfo(dir);
-  const output = generateDesignMd(info, dir);
+  const output = generateDesignMd(info);
 
   if (toStdout) {
     process.stdout.write(output);
@@ -563,8 +531,8 @@ async function main() {
   const detected = [];
   if (info.pkg?.framework) detected.push(info.pkg.framework);
   if (info.pkg?.hasTailwind) detected.push('Tailwind CSS');
-  if (info.pkg?.uiLibrary) detected.push(info.pkg.uiLibrary);
-  if (info.isShadcn) detected.push('shadcn/ui tokens');
+  if (info.isShadcn) detected.push('shadcn/ui');
+  else if (info.pkg?.uiLibrary) detected.push(info.pkg.uiLibrary);
   if (Object.keys(info.twColors).length) detected.push(`${Object.keys(info.twColors).length} custom colors`);
   if (info.cssFile) detected.push(`CSS vars from ${info.cssFile}`);
 
