@@ -361,8 +361,10 @@ function generateDesignMd(info) {
 
   if (stackItems.length) {
     stackItems.forEach(i => lines.push(`- ${i}`));
-  } else {
+  } else if (!pkg) {
     lines.push('_No package.json found — fill in manually._');
+  } else {
+    lines.push('_No UI framework detected — fill in manually._');
   }
   lines.push('');
 
