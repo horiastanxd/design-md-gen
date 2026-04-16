@@ -237,8 +237,7 @@ function detectDesignTokens(dir) {
   ];
 
   for (const rel of candidates) {
-    const data = readJSON(join(dir, rel));
-    if (data) return { data, file: rel };
+    if (readJSON(join(dir, rel))) return { file: rel };
   }
   return null;
 }
@@ -319,7 +318,6 @@ async function gatherDesignInfo(dir) {
     twFonts,
     twScreens,
     twBorderRadius,
-    cssVars,
     cssFile,
     isShadcn,
     classified,
