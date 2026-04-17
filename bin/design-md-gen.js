@@ -51,10 +51,22 @@ function findFiles(dir, exts, maxDepth = 3) {
 
 function extractCSSVars(cssText) {
   const vars = {};
-  const rootPattern = /(?::root|@layer\s+base\s*\{[^}]*:root)\s*\{([^}]+)\}/gs;
+  // Find every `:root {` occurrence and read the block with a brace counter
+  // so nested blocks (inside `@layer base { ... }`) work.
+  const re = /:root\s*\{/g;
   let m;
-  while ((m = rootPattern.exec(cssText)) !== null) {
-    const block = m[1];
+  while ((m = re.exec(cssText)) !== null) {
+    const start = m.index + m[0].length;
+    let depth = 1;
+    let i = start;
+    while (i < cssText.length && depth > 0) {
+      const ch = cssText[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') depth--;
+      if (depth === 0) break;
+      i++;
+    }
+    const block = cssText.slice(start, i);
     for (const [, name, value] of block.matchAll(/--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g)) {
       vars[name] = value.trim();
     }
@@ -113,26 +125,43 @@ function flattenColorMap(obj, prefix = '', depth = 0) {
   return out;
 }
 
+function readBalancedBlock(text, key) {
+  const re = new RegExp(key + '\\s*:\\s*\\{', 'g');
+  const m = re.exec(text);
+  if (!m) return null;
+  const start = m.index + m[0].length;
+  let depth = 1;
+  let i = start;
+  while (i < text.length && depth > 0) {
+    const ch = text[i];
+    if (ch === '{') depth++;
+    else if (ch === '}') depth--;
+    if (depth === 0) break;
+    i++;
+  }
+  return text.slice(start, i);
+}
+
 function parseTailwindText(text) {
   const result = { colors: {}, fonts: {}, screens: {} };
 
-  const colorMatch = text.match(/colors\s*:\s*\{([\s\S]*?)\}/);
-  if (colorMatch) {
-    for (const [, k, v] of colorMatch[1].matchAll(/['"]?([\w-]+)['"]?\s*:\s*['"]([^'"]+)['"]/g)) {
+  const colorBlock = readBalancedBlock(text, 'colors');
+  if (colorBlock) {
+    for (const [, k, v] of colorBlock.matchAll(/['"]?([\w-]+)['"]?\s*:\s*['"]([^'"]+)['"]/g)) {
       result.colors[k] = v;
     }
   }
 
-  const fontMatch = text.match(/fontFamily\s*:\s*\{([\s\S]*?)\}/);
-  if (fontMatch) {
-    for (const [, k, v] of fontMatch[1].matchAll(/['"]?([\w-]+)['"]?\s*:\s*\[?\s*['"]([^'"]+)['"]/g)) {
+  const fontBlock = readBalancedBlock(text, 'fontFamily');
+  if (fontBlock) {
+    for (const [, k, v] of fontBlock.matchAll(/['"]?([\w-]+)['"]?\s*:\s*\[?\s*['"]([^'"]+)['"]/g)) {
       result.fonts[k] = v;
     }
   }
 
-  const screenMatch = text.match(/screens\s*:\s*\{([\s\S]*?)\}/);
-  if (screenMatch) {
-    for (const [, k, v] of screenMatch[1].matchAll(/['"]?([\w-]+)['"]?\s*:\s*['"]([^'"]+)['"]/g)) {
+  const screenBlock = readBalancedBlock(text, 'screens');
+  if (screenBlock) {
+    for (const [, k, v] of screenBlock.matchAll(/['"]?([\w-]+)['"]?\s*:\s*['"]([^'"]+)['"]/g)) {
       result.screens[k] = v;
     }
   }
@@ -237,7 +266,10 @@ function detectDesignTokens(dir) {
   ];
 
   for (const rel of candidates) {
-    if (readJSON(join(dir, rel))) return { file: rel };
+    const full = join(dir, rel);
+    if (!existsSync(full)) continue;
+    if (readJSON(full)) return { file: rel };
+    console.warn(`Warning: ${rel} exists but could not be parsed as JSON.`);
   }
   return null;
 }
@@ -504,10 +536,20 @@ async function main() {
   let overwrite = false;
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--output' && args[i + 1]) { outputFile = args[++i]; }
-    else if (args[i] === '--stdout') { toStdout = true; }
-    else if (args[i] === '--overwrite') { overwrite = true; }
-    else if (!args[i].startsWith('--')) { targetDir = args[i]; }
+    const a = args[i];
+    if (a === '--output') {
+      if (!args[i + 1] || args[i + 1].startsWith('--')) {
+        console.error('--output requires a filename.');
+        process.exit(1);
+      }
+      outputFile = args[++i];
+    } else if (a.startsWith('--output=')) {
+      outputFile = a.slice('--output='.length);
+      if (!outputFile) { console.error('--output= requires a filename.'); process.exit(1); }
+    } else if (a === '--stdout') { toStdout = true; }
+    else if (a === '--overwrite') { overwrite = true; }
+    else if (!a.startsWith('--')) { targetDir = a; }
+    else { console.error(`Unknown flag: ${a}`); process.exit(1); }
   }
 
   const dir = resolve(targetDir);
