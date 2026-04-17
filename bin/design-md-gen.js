@@ -362,9 +362,9 @@ function generateDesignMd(info) {
   if (stackItems.length) {
     stackItems.forEach(i => lines.push(`- ${i}`));
   } else if (!pkg) {
-    lines.push('_No package.json found — fill in manually._');
+    lines.push('_No package.json found - fill in manually._');
   } else {
-    lines.push('_No UI framework detected — fill in manually._');
+    lines.push('_No UI framework detected - fill in manually._');
   }
   lines.push('');
 
@@ -396,7 +396,7 @@ function generateDesignMd(info) {
   } else if (pkg?.hasTailwind) {
     lines.push('Using Tailwind CSS default palette. No custom colors detected.');
   } else {
-    lines.push('_No color tokens detected — add your palette here._');
+    lines.push('_No color tokens detected - add your palette here._');
   }
   lines.push('');
 
@@ -539,7 +539,7 @@ async function main() {
   if (detected.length) {
     console.log(`Detected: ${detected.join(', ')}`);
   } else {
-    console.log('No design tokens detected — generated a blank template.');
+    console.log('No design tokens detected - generated a blank template.');
   }
 }
 

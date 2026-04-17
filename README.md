@@ -2,7 +2,7 @@
 
 CLI that generates a `DESIGN.md` for your project. It reads your Tailwind config, CSS variables, and package dependencies to produce a design system reference that AI coding agents can use to build consistent UIs.
 
-`DESIGN.md` tells agents which colors, fonts, breakpoints, and component patterns to use — without you having to explain it every time.
+`DESIGN.md` tells agents which colors, fonts, breakpoints, and component patterns to use - without you having to explain it every time.
 
 ## Usage
 
@@ -112,7 +112,7 @@ shadcn/ui tokens automatically switch between light and dark via the `.dark` cla
 
 ## Why
 
-AI agents build UIs that look inconsistent because they don't know which colors, fonts, or component patterns a project uses. `DESIGN.md` gives them that context in one file. This tool generates the mechanical parts — scanning configs — so you only have to fill in the judgment calls.
+AI agents build UIs that look inconsistent because they don't know which colors, fonts, or component patterns a project uses. `DESIGN.md` gives them that context in one file. This tool generates the mechanical parts - scanning configs - so you only have to fill in the judgment calls.
 
 ## Requirements
 
